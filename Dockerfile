@@ -1,11 +1,9 @@
-
-FROM openjdk:17-jdk-slim
+FROM openjdk:17
 
 WORKDIR /app
 
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
-
 COPY src ./src
 
 RUN chmod +x mvnw
