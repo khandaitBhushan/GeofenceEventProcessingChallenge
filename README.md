@@ -1,5 +1,4 @@
 # Geofence Event Processing Service
-[![Ask DeepWiki](https://devin.ai/assets/askdeepwiki.png)](https://deepwiki.com/khandaitBhushan/GeofenceEventProcessingChallenge)
 
 This repository contains a Spring Boot application designed to process vehicle location events and determine their relationship with predefined geographic zones (geofences). The service can track when vehicles enter or exit these zones, retrieve the current status of a vehicle, and provide a history of its zone transitions.
 
