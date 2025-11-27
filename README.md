@@ -1,176 +1,260 @@
-# Geofence Event Processing Service
 
-This repository contains a Spring Boot application designed to process vehicle location events and determine their relationship with predefined geographic zones (geofences). The service can track when vehicles enter or exit these zones, retrieve the current status of a vehicle, and provide a history of its zone transitions.
+# 🚖 Geofence Event Processing Service
 
-The application is built to be easily run locally for development (using MySQL) or deployed as a containerized service (using PostgreSQL).
+A real-time location tracking and geofencing service built for taxi companies.  
+This backend system processes continuous GPS updates from vehicles, determines when vehicles **enter or exit defined geographic zones**, maintains transition history, and provides APIs to query zone status.
 
-## Features
+This project demonstrates:
+- Clean code architecture
+- Robust REST API development
+- Practical geofence detection algorithm
+- Real-time processing capability
 
-*   **Process Location Events**: Ingests real-time vehicle location data (latitude, longitude).
-*   **Geofence Detection**: Determines if a vehicle's location falls within any of the predefined geographic zones.
-*   **Transition Tracking**: Records events when a vehicle enters or exits a geofence.
-*   **Current Status Query**: Provides the last known location and current zone status for any vehicle.
-*   **Historical Data**: Retrieves a complete history of all geofence transitions for a specific vehicle.
-*   **Zone Initialization**: Automatically populates the database with predefined zones for key New York City locations (Central Park, Times Square, LaGuardia Airport, JFK Airport) on first run.
+---
 
-## Technology Stack
+## 🧠 Problem Statement & Objective
 
-*   **Backend**: Java 17, Spring Boot 3, Spring Data JPA
-*   **Databases**: PostgreSQL (Production), MySQL (Development)
-*   **Build Tool**: Apache Maven
-*   **Containerization**: Docker, Docker Compose
-*   **Deployment**: Configuration provided for [Render](https://render.com)
+The system receives live GPS events for vehicles and must:
+1. **Accept location events** via HTTP endpoint
+2. **Determine zone entry/exit** based on coordinates
+3. **Provide zone status** for any vehicle
+4. **Track and store transition history**
 
-## API Endpoints
+---
 
-The API base path for all endpoints is `/api/v1`.
+## 🚀 Tech Stack
 
-### 1. Submit a Location Event
+| Component | Technology | Version |
+|-----------|-----------|---------|
+| Backend Framework | Spring Boot | 3.3.4 |
+| Language | Java | 17 |
+| Database | PostgreSQL | 16 |
+| Build Tool | Maven | 4.0 |
+| Deployment | Render Cloud | Live Production |
+| Logging | SLF4J & Spring Boot Logging |
+| Mapping & Geo | Custom Polygon Geofence Algorithm |
+| API Testing | Postman / Curl |
 
-Processes a new location update for a vehicle. It determines if this update results in an entrance to, or exit from, a geofence.
+---
 
-*   **Endpoint**: `POST /location-events`
-*   **Request Body**:
+## ⚙️ Requirements
 
-    ```json
+### **Prerequisites**
+- Java 17+
+- Maven 4.x
+- PostgreSQL installed locally or hosted
+- Internet connection (for deployment)
+
+### **Environment Variables**
+```env
+DATABASE_URL=<postgres-url>
+DATABASE_USERNAME=<db-user>
+DATABASE_PASSWORD=<db-password>
+PORT=8080
+````
+
+---
+
+## 🧪 API Endpoints
+
+### **1️⃣ Send Location Event**
+
+Process live GPS event from a vehicle
+
+| Method       | POST                                                           |
+| ------------ | -------------------------------------------------------------- |
+| URL          | `https://geofence-service.onrender.com/api/v1/location-events` |
+| Content-Type | `application/json`                                             |
+
+#### **Request Body**
+
+```json
+{
+  "vehicleId": "taxi_001",
+  "latitude": 40.758,
+  "longitude": -73.985
+}
+```
+
+#### **Success Response**
+
+```json
+{
+  "success": true,
+  "message": "Location event processed successfully",
+  "timestamp": "2025-11-27T17:15:59.267030605"
+}
+```
+
+#### **Failure Response**
+
+```json
+{
+  "success": false,
+  "message": "Invalid location data",
+  "errorCode": "BAD_REQUEST"
+}
+```
+
+---
+
+### **2️⃣ Get Current Zone of Vehicle**
+
+| Method | GET                                                                           |
+| ------ | ----------------------------------------------------------------------------- |
+| URL    | `https://geofence-service.onrender.com/api/v1/vehicles/taxi_001/current-zone` |
+
+#### **Success Response**
+
+```json
+{
+  "success": true,
+  "message": "Current zone status retrieved",
+  "data": {
+    "vehicleId": "taxi_001",
+    "currentZoneId": "TMS",
+    "currentZoneName": "Times Square",
+    "latitude": 40.758,
+    "longitude": -73.985,
+    "lastUpdate": "2025-11-27T17:16:00.000000",
+    "status": "IN_ZONE"
+  },
+  "timestamp": "2025-11-27T17:16:50.43311636"
+}
+```
+
+#### **If NO_ZONE**
+
+```json
+{
+  "success": true,
+  "message": "Current zone status retrieved",
+  "data": {
+    "vehicleId": "taxi_001",
+    "currentZoneId": null,
+    "currentZoneName": null,
+    "latitude": 40.750,
+    "longitude": -73.990,
+    "status": "NO_ZONE"
+  }
+}
+```
+
+---
+
+### **3️⃣ Get Vehicle Transition History**
+
+| Method | GET                                                                                 |
+| ------ | ----------------------------------------------------------------------------------- |
+| URL    | `https://geofence-service.onrender.com/api/v1/vehicles/taxi_001/transition-history` |
+
+#### **Success Response**
+
+```json
+{
+  "success": true,
+  "message": "Transition history retrieved",
+  "data": [
     {
-        "vehicleId": "taxi-101",
-        "latitude": 40.7580,
-        "longitude": -73.9855,
-        "timestamp": "2024-01-28T10:00:00Z"
+      "id": 1,
+      "vehicleId": "taxi_001",
+      "zoneId": "TMS",
+      "transitionType": "ENTER",
+      "timestamp": "2025-11-27T15:32:11.458502",
+      "latitude": 40.758,
+      "longitude": -73.985
     }
-    ```
-    *Note: If `timestamp` is omitted, the server's current time will be used.*
+  ]
+}
+```
 
-*   **Success Response** (200 OK):
+---
 
-    ```json
-    {
-        "success": true,
-        "message": "Location event processed successfully",
-        "data": null,
-        "timestamp": "2024-01-28T10:00:01.12345Z"
-    }
-    ```
+## 🔍 How It Works (Algorithm Explanation)
 
-### 2. Get Current Vehicle Zone Status
+1. Vehicle sends live GPS coordinates
+2. System checks if coordinates lie inside any defined zone
+3. Compares with previous zone state
+4. If zone changed → create a **transition event**
+5. Update current zone table
+6. Return processed result
 
-Retrieves the last recorded location and current zone information for a specific vehicle.
+### **Geofence Detection**
 
-*   **Endpoint**: `GET /vehicles/{vehicleId}/current-zone`
-*   **Example URL**: `/api/v1/vehicles/taxi-101/current-zone`
-*   **Success Response** (200 OK):
+* Uses bounding area polygon checks
+* Ray-casting algorithm for point-in-polygon
+* Avoids heavy libraries for performance
 
-    ```json
-    {
-        "success": true,
-        "message": "Current zone status retrieved",
-        "data": {
-            "vehicleId": "taxi-101",
-            "currentZoneId": "TMS",
-            "currentZoneName": "Times Square",
-            "latitude": 40.7580,
-            "longitude": -73.9855,
-            "lastUpdate": "2024-01-28T10:00:01.123Z",
-            "status": "IN_ZONE"
-        },
-        "timestamp": "2024-01-28T10:05:00.678Z"
-    }
-    ```
-    *`status` can be `IN_ZONE`, `NO_ZONE`, or `VEHICLE_NOT_FOUND`.*
+### **Database Tables**
 
-### 3. Get Vehicle Transition History
+| Table       | Description                       |
+| ----------- | --------------------------------- |
+| vehicles    | Stores last known location + zone |
+| geozones    | Predefined zones with coordinates |
+| transitions | enter/exit event history          |
 
-Retrieves a list of all recorded zone enter/exit events for a specific vehicle, sorted by the most recent first.
+---
 
-*   **Endpoint**: `GET /vehicles/{vehicleId}/transition-history`
-*   **Example URL**: `/api/v1/vehicles/taxi-101/transition-history`
-*   **Success Response** (200 OK):
+## 🏁 Setup Instructions
 
-    ```json
-    {
-        "success": true,
-        "message": "Transition history retrieved",
-        "data": [
-            {
-                "id": 2,
-                "vehicleId": "taxi-101",
-                "zoneId": "TMS",
-                "transitionType": "ENTER",
-                "timestamp": "2024-01-28T10:00:00Z",
-                "latitude": 40.7580,
-                "longitude": -73.9855
-            },
-            {
-                "id": 1,
-                "vehicleId": "taxi-101",
-                "zoneId": "CPK",
-                "transitionType": "EXIT",
-                "timestamp": "2024-01-28T09:45:00Z",
-                "latitude": 40.763,
-                "longitude": -73.982
-            }
-        ],
-        "timestamp": "2024-01-28T10:06:00.910Z"
-    }
-    ```
+```bash
+git clone https://github.com/your-repo/geofence-service.git
+cd geofence-service
+mvn clean install
+mvn spring-boot:run
+```
 
-## Getting Started
+Application will start at:
 
-### Prerequisites
+```
+http://localhost:8080
+```
 
-*   Java 17 or higher
-*   Apache Maven
-*   Docker and Docker Compose
+To test:
 
-### Option 1: Run Locally with Docker (Recommended)
+```bash
+curl https://geofence-service.onrender.com/actuator/health
+```
 
-This method uses Docker Compose to start the application and a PostgreSQL database, mirroring the production environment.
+---
 
-1.  **Clone the repository:**
-    ```sh
-    git clone https://github.com/khandaitbhushan/GeofenceEventProcessingChallenge.git
-    cd GeofenceEventProcessingChallenge
-    ```
+## 🎯 Assumptions
 
-2.  **Build and run with Docker Compose:**
-    ```sh
-    docker-compose up --build
-    ```
+* Zones are fixed and defined manually
+* GPS accuracy tolerance is acceptable up to ~10 meters
+* Vehicle events always contain valid coordinates
+* Vehicle IDs are supplied externally
 
-The application will be accessible at `http://localhost:8080`.
+---
 
-### Option 2: Run Locally with Maven and MySQL
+## 🧠 Design Decisions
 
-This method is suitable for development if you prefer to run the application directly on your machine and connect to a local MySQL instance.
+| Choice                | Reason                                     |
+| --------------------- | ------------------------------------------ |
+| SQL DB over NoSQL     | Requires consistent historical tracking    |
+| Real-time REST events | Easier integration with GPS devices        |
+| Custom geofence logic | Performance and control                    |
+| Transition tracking   | Useful for analytics, billing & compliance |
 
-1.  **Clone the repository:**
-    ```sh
-    git clone https://github.com/khandaitbhushan/GeofenceEventProcessingChallenge.git
-    cd GeofenceEventProcessingChallenge
-    ```
+---
 
-2.  **Configure the database connection:**
-    Open `src/main/resources/application-dev.properties` and update the MySQL connection details:
-    ```properties
-    spring.datasource.url=jdbc:mysql://localhost:3306/geofence_db?createDatabaseIfNotExist=true
-    spring.datasource.username=your-mysql-user
-    spring.datasource.password=your-mysql-password
-    ```
+## 📈 Future Improvements / Next Roadmap
 
-3.  **Run the application:**
-    ```sh
-    ./mvnw spring-boot:run
-    ```
+* Add WebSocket live vehicle map visualization
+* Mobile app support
+* Admin UI for geofence zone editing
+* Kafka event streaming for high scale
+* AI-based movement predictions
+* Alert notifications (SMS/Email/WebPush)
 
-The application will be accessible at `http://localhost:8080`. The `dev` profile is active by default.
+---
 
-## Deployment
+## 👨‍💻 Author
 
-This service is configured for easy deployment on **Render** using the `render.yaml` blueprint.
+**Bhushan Khandait**
+Backend Engineer | Java | Spring Boot | REST APIs | PostgreSQL
 
-*   The service is built and deployed as a Docker container from the provided `Dockerfile`.
-*   It automatically provisions and connects to a free-tier PostgreSQL database named `geofence-db`.
-*   The `prod` Spring profile is activated, which configures JPA for PostgreSQL.
-*   A health check is configured at `/actuator/health` to ensure service reliability.
-*   Auto-deploy is enabled, meaning any push to the main branch will trigger a new deployment.
+---
+
+### ⭐ If you like this project, give it a star on GitHub 🙌
+
