@@ -18,6 +18,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1")
 @Validated
+@CrossOrigin("*")
 public class GeofenceController {
 
     private static final Logger log = LoggerFactory.getLogger(GeofenceController.class);
